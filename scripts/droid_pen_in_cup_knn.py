@@ -188,6 +188,29 @@ def _metadata_string(traj: dict[str, Any], *path: str) -> str:
     return _decode(value)
 
 
+def _iter_steps(steps: Any):
+    if hasattr(steps, "as_numpy_iterator"):
+        yield from steps.as_numpy_iterator()
+    else:
+        yield from steps
+
+
+def _first_step(steps: Any) -> dict[str, Any] | None:
+    for step in _iter_steps(steps):
+        return step
+    return None
+
+
+def _step_prompts(step: dict[str, Any]) -> list[str]:
+    prompts = []
+    for key in ("language_instruction", "language_instruction_2", "language_instruction_3"):
+        if key in step:
+            prompt = _decode(step[key]).strip()
+            if prompt and prompt not in prompts:
+                prompts.append(prompt)
+    return prompts
+
+
 def _scan_raw_annotations(raw_data_dir: str, raw_annotation_json: str | None, output_dir: Path) -> None:
     """Best-effort raw annotation scan for auditability; RLDS remains source of frame truth."""
     root = Path(raw_data_dir)
@@ -253,38 +276,39 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
     image_dir.mkdir(parents=True, exist_ok=True)
 
     records: list[FrameRecord] = []
-    for episode in tfds.as_numpy(dataset):
-        prompts = _extract_prompts(episode)
+    for episode_index, episode in enumerate(dataset):
+        first_step = _first_step(episode["steps"])
+        if first_step is None:
+            continue
+
+        prompts = _step_prompts(first_step)
         matching_prompts = [prompt for prompt in prompts if _is_pen_in_cup(prompt)]
         if not matching_prompts:
             continue
 
         prompt = matching_prompts[0]
-        recording_folder = _metadata_string(
-            episode, "traj_metadata", "episode_metadata", "recording_folderpath"
-        )
-        file_path = _metadata_string(episode, "traj_metadata", "episode_metadata", "file_path")
+        recording_folder = _metadata_string(episode, "episode_metadata", "recording_folderpath")
+        file_path = _metadata_string(episode, "episode_metadata", "file_path")
         if file_path and not re.search("success", file_path):
             continue
 
-        episode_id = f"{recording_folder}--{file_path}".strip("-")
-        obs = episode["observation"]
-        num_steps = int(np.asarray(obs["joint_position"]).shape[0])
+        episode_id = f"{recording_folder}--{file_path}".strip("-") or f"episode_{episode_index}"
 
-        for step in range(num_steps):
+        for step_index, step_data in enumerate(_iter_steps(episode["steps"])):
             if args.max_frames is not None and len(records) >= args.max_frames:
                 _write_manifest(output_dir / "pen_in_cup_manifest.csv", records)
                 logging.info("Reached --max-frames=%d", args.max_frames)
                 return records
 
             frame_id = len(records)
-            step_id = f"{episode_id}--{step}"
-            base = _as_image(obs["exterior_image_1_left"][step])
-            wrist = _as_image(obs["wrist_image_left"][step])
+            step_id = f"{episode_id}--{step_index}"
+            obs = step_data["observation"]
+            base = _as_image(obs["exterior_image_1_left"])
+            wrist = _as_image(obs["wrist_image_left"])
             state = np.concatenate(
                 [
-                    np.asarray(obs["joint_position"][step], dtype=np.float32),
-                    np.asarray(obs["gripper_position"][step], dtype=np.float32).reshape(-1)[:1],
+                    np.asarray(obs["joint_position"], dtype=np.float32),
+                    np.asarray(obs["gripper_position"], dtype=np.float32).reshape(-1)[:1],
                 ],
                 axis=0,
             )
@@ -306,7 +330,7 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
                     frame_id=frame_id,
                     episode_id=episode_id,
                     step_id=step_id,
-                    frame_index=step,
+                    frame_index=step_index,
                     prompt=prompt,
                     base_image=str(base_rel),
                     wrist_image=str(wrist_rel),
