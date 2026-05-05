@@ -61,6 +61,12 @@ rlds = [
     "tensorflow-cpu==2.15.0",
     "tensorflow-datasets==4.9.9",
 ]
+droid-knn = [
+    # Keep this separate from rlds: dlimp depends on the GPU tensorflow package,
+    # which conflicts with tensorflow-cpu on some ILIAD nodes.
+    "tensorflow-cpu==2.15.0",
+    "tensorflow-datasets==4.9.9",
+]
 
 [tool.uv]
 override-dependencies = ["ml-dtypes==0.4.1", "tensorstore==0.1.74"]

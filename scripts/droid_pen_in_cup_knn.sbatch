@@ -72,4 +72,4 @@ if [[ -n "${MAX_FRAMES:-}" ]]; then
   ARGS+=(--max-frames "${MAX_FRAMES}")
 fi
 
-uv run --no-sync --group rlds python scripts/droid_pen_in_cup_knn.py "${ARGS[@]}"
+uv run --no-sync --group "${UV_GROUP:-droid-knn}" python scripts/droid_pen_in_cup_knn.py "${ARGS[@]}"
