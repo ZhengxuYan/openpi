@@ -51,6 +51,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 uv --version
+echo "UV_CACHE_DIR=${UV_CACHE_DIR}"
 
 OUT_DIR="${OUT_DIR:-/iliad2/u/${USER}/droid_pen_in_cup_knn}"
 WORK_DIR="${SLURM_TMPDIR:-/tmp}/${USER}/droid_pen_in_cup_knn_${SLURM_JOB_ID}"
@@ -69,4 +70,4 @@ if [[ -n "${MAX_FRAMES:-}" ]]; then
   ARGS+=(--max-frames "${MAX_FRAMES}")
 fi
 
-uv run --group rlds python scripts/droid_pen_in_cup_knn.py "${ARGS[@]}"
+uv run --no-sync --group rlds python scripts/droid_pen_in_cup_knn.py "${ARGS[@]}"
