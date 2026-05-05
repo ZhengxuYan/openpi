@@ -25,6 +25,33 @@ export XLA_PYTHON_CLIENT_MEM_FRACTION=0.85
 
 cd "${SLURM_SUBMIT_DIR}"
 
+export PATH="/iliad2/u/${USER}/.local/bin:${HOME}/.local/bin:${PATH}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/iliad2/u/${USER}/.cache/uv}"
+
+if [[ -n "${CONDA_SH:-}" ]]; then
+  source "${CONDA_SH}"
+  conda activate "${CONDA_ENV:-openpi-rlds}"
+elif [[ -f "/iris/u/${USER}/miniforge3/etc/profile.d/conda.sh" ]]; then
+  source "/iris/u/${USER}/miniforge3/etc/profile.d/conda.sh"
+  conda activate "${CONDA_ENV:-openpi-rlds}"
+elif [[ -f "/iliad/u/${USER}/miniconda3/etc/profile.d/conda.sh" ]]; then
+  source "/iliad/u/${USER}/miniconda3/etc/profile.d/conda.sh"
+  conda activate "${CONDA_ENV:-openpi-rlds}"
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  UV_BOOTSTRAP="/iliad2/u/${USER}/venvs/uv-bootstrap"
+  if [[ ! -x "${UV_BOOTSTRAP}/bin/uv" ]]; then
+    echo "uv not found; bootstrapping uv into ${UV_BOOTSTRAP}"
+    python3 -m venv "${UV_BOOTSTRAP}"
+    "${UV_BOOTSTRAP}/bin/python" -m pip install --upgrade pip
+    "${UV_BOOTSTRAP}/bin/python" -m pip install uv
+  fi
+  export PATH="${UV_BOOTSTRAP}/bin:${PATH}"
+fi
+
+uv --version
+
 OUT_DIR="${OUT_DIR:-/iliad2/u/${USER}/droid_pen_in_cup_knn}"
 WORK_DIR="${SLURM_TMPDIR:-/tmp}/${USER}/droid_pen_in_cup_knn_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}" "${WORK_DIR}"
