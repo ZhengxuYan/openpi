@@ -13,11 +13,15 @@ import dataclasses
 import html
 import json
 import logging
+import os
 from pathlib import Path
 import re
 import shutil
 import sys
 from typing import Any, Iterable
+
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
