@@ -29,6 +29,7 @@ cd "${SLURM_SUBMIT_DIR}"
 
 export PATH="/iliad2/u/${USER}/.local/bin:${HOME}/.local/bin:${PATH}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/iliad2/u/${USER}/.cache/uv}"
+export OPENPI_DATA_HOME="${OPENPI_DATA_HOME:-/iliad2/u/${USER}/.cache/openpi}"
 
 if [[ -n "${CONDA_SH:-}" ]]; then
   source "${CONDA_SH}"
@@ -54,10 +55,11 @@ fi
 
 uv --version
 echo "UV_CACHE_DIR=${UV_CACHE_DIR}"
+echo "OPENPI_DATA_HOME=${OPENPI_DATA_HOME}"
 
 OUT_DIR="${OUT_DIR:-/iliad2/u/${USER}/droid_pen_in_cup_knn}"
 WORK_DIR="${SLURM_TMPDIR:-/tmp}/${USER}/droid_pen_in_cup_knn_${SLURM_JOB_ID}"
-mkdir -p "${OUT_DIR}" "${WORK_DIR}"
+mkdir -p "${OUT_DIR}" "${WORK_DIR}" "${UV_CACHE_DIR}" "${OPENPI_DATA_HOME}"
 
 ARGS=(
   --rlds-data-dir "${RLDS_DATA_DIR:-/iliad/group/datasets/droid}"
