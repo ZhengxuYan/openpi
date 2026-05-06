@@ -369,8 +369,11 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
 
     raw_npz_dir = work_dir / "raw_frames"
     image_dir = output_dir / "images"
+    manifest_path = output_dir / "pen_in_cup_manifest.csv"
     raw_npz_dir.mkdir(parents=True, exist_ok=True)
     image_dir.mkdir(parents=True, exist_ok=True)
+    if manifest_path.exists():
+        manifest_path.unlink()
 
     records: list[FrameRecord] = []
     for match in episode_matches:
@@ -378,7 +381,6 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
         matching_episode = next(iter(dataset.skip(match.episode_index).take(1)))
         for step_index, step_data in enumerate(_iter_steps(matching_episode["steps"])):
             if args.max_frames is not None and len(records) >= args.max_frames:
-                _write_manifest(output_dir / "pen_in_cup_manifest.csv", records)
                 logging.info("Reached --max-frames=%d", args.max_frames)
                 return records
 
@@ -407,19 +409,20 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
                 prompt=np.asarray(prompt),
             )
 
-            records.append(
-                FrameRecord(
-                    frame_id=frame_id,
-                    episode_id=match.episode_id,
-                    step_id=step_id,
-                    frame_index=step_index,
-                    prompt=match.prompt,
-                    base_image=str(base_rel),
-                    wrist_image=str(wrist_rel),
-                )
+            record = FrameRecord(
+                frame_id=frame_id,
+                episode_id=match.episode_id,
+                step_id=step_id,
+                frame_index=step_index,
+                prompt=match.prompt,
+                base_image=str(base_rel),
+                wrist_image=str(wrist_rel),
             )
+            records.append(record)
+            _append_manifest_row(manifest_path, record)
 
-    _write_manifest(output_dir / "pen_in_cup_manifest.csv", records)
+    if not records:
+        _write_manifest(manifest_path, records)
     return records
 
 
@@ -431,6 +434,16 @@ def _write_manifest(path: Path, records: list[FrameRecord]) -> None:
         for record in records:
             writer.writerow(dataclasses.asdict(record))
     logging.info("Wrote %d manifest rows to %s", len(records), path)
+
+
+def _append_manifest_row(path: Path, record: FrameRecord) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    needs_header = not path.exists()
+    with path.open("a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=[field.name for field in dataclasses.fields(FrameRecord)])
+        if needs_header:
+            writer.writeheader()
+        writer.writerow(dataclasses.asdict(record))
 
 
 def _raw_observation(work_dir: Path, frame_id: int) -> dict[str, Any]:
