@@ -104,6 +104,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Copy intermediate raw .npz frame caches to --output-dir. Off by default to reduce storage use.",
     )
+    parser.add_argument(
+        "--test-prompt-matcher",
+        action="store_true",
+        help="Run prompt matcher sanity checks and exit.",
+    )
     return parser.parse_args()
 
 
@@ -114,7 +119,36 @@ def _normalize_text(text: str) -> str:
 def _is_pen_in_cup(text: str) -> bool:
     normalized = _normalize_text(text)
     compact = normalized.replace(" ", "_")
-    return "pen_in_cup" in compact or ("pen" in normalized.split() and "cup" in normalized.split())
+    if re.search(r"\b(out|outside)\b.*\b(of|from)\b.*\bcup\b", normalized):
+        return False
+    if re.search(r"\bremove\b.*\bpen\b.*\bcup\b", normalized):
+        return False
+    if "pen_in_cup" in compact or "pen_into_cup" in compact:
+        return True
+    return bool(
+        re.search(r"\bpen\b.*\b(in|into|inside)\b.*\bcup\b", normalized)
+        or re.search(r"\b(place|put|move|insert)\b.*\bpen\b.*\b(in|into|inside)\b.*\bcup\b", normalized)
+    )
+
+
+def _test_prompt_matcher() -> None:
+    positives = [
+        "put the pen in the cup",
+        "place the pen into the white cup",
+        "insert the pen inside the cup",
+    ]
+    negatives = [
+        "Move the pen out of the white cup and place it on top of the cabinet",
+        "remove the pen from the cup",
+        "pick up the cup next to the pen",
+    ]
+    for prompt in positives:
+        if not _is_pen_in_cup(prompt):
+            raise AssertionError(f"Expected prompt to match: {prompt}")
+    for prompt in negatives:
+        if _is_pen_in_cup(prompt):
+            raise AssertionError(f"Expected prompt not to match: {prompt}")
+    print("Prompt matcher sanity checks passed.")
 
 
 def _decode(value: Any) -> str:
@@ -636,6 +670,9 @@ def _cleanup_raw_frame_cache(work_dir: Path, *, keep_raw_frame_cache: bool) -> N
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
+    if args.test_prompt_matcher:
+        _test_prompt_matcher()
+        return
     output_dir = Path(args.output_dir)
     work_dir = Path(args.work_dir) if args.work_dir else output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
