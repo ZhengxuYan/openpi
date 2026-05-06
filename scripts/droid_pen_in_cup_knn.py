@@ -85,6 +85,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--max-frames", type=int, default=None)
+    parser.add_argument(
+        "--max-episodes",
+        type=int,
+        default=None,
+        help="Stop scanning after this many DROID episodes. Useful for metadata/debug scans.",
+    )
+    parser.add_argument("--progress-every", type=int, default=100, help="Log scan progress every N episodes.")
     parser.add_argument("--version", default="1.0.1")
     parser.add_argument("--pi0-checkpoint", default=DEFAULT_CHECKPOINTS["pi0"])
     parser.add_argument("--pi0-fast-checkpoint", default=DEFAULT_CHECKPOINTS["pi0_fast"])
@@ -324,6 +331,11 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
 
     records: list[FrameRecord] = []
     for episode_index, episode in enumerate(dataset):
+        if args.max_episodes is not None and episode_index >= args.max_episodes:
+            logging.info("Reached --max-episodes=%d", args.max_episodes)
+            break
+        if args.progress_every and episode_index % args.progress_every == 0:
+            logging.info("Scanned %d episodes; collected %d frames", episode_index, len(records))
         first_step = _first_step(episode["steps"])
         if first_step is None:
             continue
