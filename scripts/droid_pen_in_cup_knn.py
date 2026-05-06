@@ -64,6 +64,13 @@ class FrameRecord:
     wrist_image: str
 
 
+@dataclasses.dataclass(frozen=True)
+class EpisodeMatch:
+    episode_index: int
+    episode_id: str
+    prompt: str
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rlds-data-dir", default="/iliad/group/datasets/droid")
@@ -324,43 +331,59 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
         },
     )
 
-    raw_npz_dir = work_dir / "raw_frames"
-    image_dir = work_dir / "images"
-    raw_npz_dir.mkdir(parents=True, exist_ok=True)
-    image_dir.mkdir(parents=True, exist_ok=True)
+    def first_step_summary(episode):
+        first_step = tf.data.Dataset.get_single_element(episode["steps"].take(1))
+        return {
+            "episode_metadata": episode["episode_metadata"],
+            "language_instruction": first_step["language_instruction"],
+            "language_instruction_2": first_step["language_instruction_2"],
+            "language_instruction_3": first_step["language_instruction_3"],
+        }
 
-    records: list[FrameRecord] = []
-    for episode_index, episode in enumerate(dataset):
+    summary_dataset = dataset.map(first_step_summary, num_parallel_calls=1)
+    episode_matches: list[EpisodeMatch] = []
+    for episode_index, summary in enumerate(summary_dataset.as_numpy_iterator()):
         if args.max_episodes is not None and episode_index >= args.max_episodes:
             logging.info("Reached --max-episodes=%d", args.max_episodes)
             break
         if args.progress_every and episode_index % args.progress_every == 0:
-            logging.info("Scanned %d episodes; collected %d frames", episode_index, len(records))
-        first_step = _first_step(episode["steps"])
-        if first_step is None:
-            continue
+            logging.info("Scanned %d episode summaries; matched %d episodes", episode_index, len(episode_matches))
 
-        prompts = _step_prompts(first_step)
+        prompts = _extract_prompts(summary)
         matching_prompts = [prompt for prompt in prompts if _is_pen_in_cup(prompt)]
         if not matching_prompts:
             continue
 
         prompt = matching_prompts[0]
-        recording_folder = _metadata_string(episode, "episode_metadata", "recording_folderpath")
-        file_path = _metadata_string(episode, "episode_metadata", "file_path")
+        recording_folder = _metadata_string(summary, "episode_metadata", "recording_folderpath")
+        file_path = _metadata_string(summary, "episode_metadata", "file_path")
         if file_path and not re.search("success", file_path):
             continue
 
         episode_id = f"{recording_folder}--{file_path}".strip("-") or f"episode_{episode_index}"
+        episode_matches.append(EpisodeMatch(episode_index=episode_index, episode_id=episode_id, prompt=prompt))
+        if args.max_frames is not None and episode_matches:
+            # The first matching episode is enough to satisfy a small smoke-test frame limit.
+            break
+    logging.info("Matched %d episodes", len(episode_matches))
 
-        for step_index, step_data in enumerate(_iter_steps(episode["steps"])):
+    raw_npz_dir = work_dir / "raw_frames"
+    image_dir = output_dir / "images"
+    raw_npz_dir.mkdir(parents=True, exist_ok=True)
+    image_dir.mkdir(parents=True, exist_ok=True)
+
+    records: list[FrameRecord] = []
+    for match in episode_matches:
+        logging.info("Collecting frames from episode %d: %s", match.episode_index, match.prompt)
+        matching_episode = next(iter(dataset.skip(match.episode_index).take(1)))
+        for step_index, step_data in enumerate(_iter_steps(matching_episode["steps"])):
             if args.max_frames is not None and len(records) >= args.max_frames:
                 _write_manifest(output_dir / "pen_in_cup_manifest.csv", records)
                 logging.info("Reached --max-frames=%d", args.max_frames)
                 return records
 
             frame_id = len(records)
-            step_id = f"{episode_id}--{step_index}"
+            step_id = f"{match.episode_id}--{step_index}"
             obs = step_data["observation"]
             base = _as_image(obs["exterior_image_1_left"])
             wrist = _as_image(obs["wrist_image_left"])
@@ -387,10 +410,10 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
             records.append(
                 FrameRecord(
                     frame_id=frame_id,
-                    episode_id=episode_id,
+                    episode_id=match.episode_id,
                     step_id=step_id,
                     frame_index=step_index,
-                    prompt=prompt,
+                    prompt=match.prompt,
                     base_image=str(base_rel),
                     wrist_image=str(wrist_rel),
                 )
