@@ -302,7 +302,20 @@ def _build_manifest(args: argparse.Namespace, output_dir: Path, work_dir: Path) 
     data_dir = _resolve_tfds_data_dir(args.rlds_data_dir)
     logging.info("Opening TFDS DROID from data_dir=%s version=%s", data_dir, args.version)
     builder = tfds.builder("droid", data_dir=str(data_dir), version=args.version)
-    dataset = builder.as_dataset(split="train", shuffle_files=False)
+    skip_image_decoding = tfds.decode.SkipDecoding()
+    dataset = builder.as_dataset(
+        split="train",
+        shuffle_files=False,
+        decoders={
+            "steps": {
+                "observation": {
+                    "exterior_image_1_left": skip_image_decoding,
+                    "exterior_image_2_left": skip_image_decoding,
+                    "wrist_image_left": skip_image_decoding,
+                }
+            }
+        },
+    )
 
     raw_npz_dir = work_dir / "raw_frames"
     image_dir = work_dir / "images"
