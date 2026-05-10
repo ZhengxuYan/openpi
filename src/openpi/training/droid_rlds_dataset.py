@@ -44,6 +44,7 @@ class DroidRldsDataset:
         action_chunk_size: int = 16,
         # We default to joint position actions, since they allow policy evaluation in simulation.
         action_space: DroidActionSpace = DroidActionSpace.JOINT_POSITION,
+        split: str = "train",
         max_loaded_steps_per_episode: int = 100,
         # Reduce this if you are running out of memory, but careful -- below ~100k shuffling is not sufficiently random.
         shuffle_buffer_size: int = 250_000,
@@ -65,9 +66,7 @@ class DroidRldsDataset:
             # ds_name, version = dataset_name.split(":")
             ds_name, version = dataset_cfg.name, dataset_cfg.version
             builder = tfds.builder(ds_name, data_dir=data_dir, version=version)
-            dataset = dl.DLataset.from_rlds(
-                builder, split="train", shuffle=shuffle, num_parallel_reads=num_parallel_reads
-            )
+            dataset = dl.DLataset.from_rlds(builder, split=split, shuffle=shuffle, num_parallel_reads=num_parallel_reads)
 
             # Filter out any unsuccessful trajectories -- we use the file name to check this
             dataset = dataset.filter(
@@ -230,7 +229,8 @@ class DroidRldsDataset:
         weights = [dataset.weight for dataset in datasets]
 
         final_dataset = dl.DLataset.sample_from_datasets(all_datasets, weights=weights)
-        final_dataset = final_dataset.shuffle(shuffle_buffer_size)
+        if shuffle:
+            final_dataset = final_dataset.shuffle(shuffle_buffer_size)
         final_dataset = final_dataset.batch(batch_size)
         # Note =>> Seems to reduce memory usage without affecting speed?
         final_dataset = final_dataset.with_ram_budget(1)

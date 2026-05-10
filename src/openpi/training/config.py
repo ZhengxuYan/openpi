@@ -579,6 +579,10 @@ class TrainConfig:
 
     # How often (in steps) to log training metrics.
     log_interval: int = 100
+    # Fraction of the dataset to hold out for validation. Set to 0 to disable validation.
+    validation_split: float = 0.05
+    # Number of validation batches to average whenever validation runs.
+    validation_num_batches: int = 10
     # How often (in steps) to save checkpoints.
     save_interval: int = 1000
     # If set, any existing checkpoints matching step % keep_period == 0 will not be deleted.
@@ -621,6 +625,10 @@ class TrainConfig:
     def __post_init__(self) -> None:
         if self.resume and self.overwrite:
             raise ValueError("Cannot resume and overwrite at the same time.")
+        if not 0.0 <= self.validation_split < 1.0:
+            raise ValueError(f"validation_split must be in [0, 1), got {self.validation_split}.")
+        if self.validation_num_batches < 0:
+            raise ValueError(f"validation_num_batches must be non-negative, got {self.validation_num_batches}.")
 
 
 # Use `get_config` if you need to get a config by name in your code.
@@ -850,6 +858,25 @@ _CONFIGS = [
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
+    ),
+    TrainConfig(
+        name="pi0_fast_robomimic_square_ph_agentview_low_mem_finetune_validation",
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ),
+        data=LeRobotRobomimicDataConfig(
+            repo_id="skybhh19/lerobot_robomimic_square_ph_agentview",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
     ),
     TrainConfig(
         name="pi0_fast_robomimic_square_mh_agentview_low_mem_finetune",

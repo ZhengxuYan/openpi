@@ -191,6 +191,21 @@ def train_step(
     return new_state, info
 
 
+@at.typecheck
+def validation_step(
+    rng: at.KeyArrayLike,
+    state: training_utils.TrainState,
+    batch: tuple[_model.Observation, _model.Actions],
+) -> dict[str, at.Array]:
+    params = state.ema_params if state.ema_params is not None else state.params
+    model = nnx.merge(state.model_def, params)
+    model.eval()
+
+    observation, actions = batch
+    chunked_loss = model.compute_loss(rng, observation, actions, train=False)
+    return {"val_loss": jnp.mean(chunked_loss)}
+
+
 def main(config: _config.TrainConfig):
     init_logging()
     logging.info(f"Running on: {platform.node()}")
@@ -221,7 +236,17 @@ def main(config: _config.TrainConfig):
         config,
         sharding=data_sharding,
         shuffle=True,
+        data_split="train",
     )
+    validation_iter = None
+    if config.validation_split > 0.0 and config.validation_num_batches > 0:
+        validation_loader = _data_loader.create_data_loader(
+            config,
+            sharding=data_sharding,
+            shuffle=False,
+            data_split="validation",
+        )
+        validation_iter = iter(validation_loader)
     data_iter = iter(data_loader)
     batch = next(data_iter)
     logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
@@ -246,6 +271,11 @@ def main(config: _config.TrainConfig):
         out_shardings=(train_state_sharding, replicated_sharding),
         donate_argnums=(1,),
     )
+    pvalidation_step = jax.jit(
+        validation_step,
+        in_shardings=(replicated_sharding, train_state_sharding, data_sharding),
+        out_shardings=replicated_sharding,
+    )
 
     start_step = int(train_state.step)
     pbar = tqdm.tqdm(
@@ -263,6 +293,19 @@ def main(config: _config.TrainConfig):
         if step % config.log_interval == 0:
             stacked_infos = common_utils.stack_forest(infos)
             reduced_info = jax.device_get(jax.tree.map(jnp.mean, stacked_infos))
+
+            if validation_iter is not None:
+                validation_infos = []
+                validation_rng = jax.random.fold_in(train_rng, step)
+                for validation_batch_idx in range(config.validation_num_batches):
+                    validation_batch = next(validation_iter)
+                    batch_rng = jax.random.fold_in(validation_rng, validation_batch_idx)
+                    with sharding.set_mesh(mesh):
+                        validation_infos.append(pvalidation_step(batch_rng, train_state, validation_batch))
+                stacked_validation_infos = common_utils.stack_forest(validation_infos)
+                reduced_validation_info = jax.device_get(jax.tree.map(jnp.mean, stacked_validation_infos))
+                reduced_info = {**reduced_info, **reduced_validation_info}
+
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             wandb.log(reduced_info, step=step)
