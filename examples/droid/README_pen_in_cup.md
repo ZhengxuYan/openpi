@@ -128,3 +128,51 @@ The policy request sent by `main.py` has this mapping:
 `exterior_image_2_left` is not needed by the OpenPI DROID inference transform.
 
 Note: `examples/droid/main.py` only requires the selected external camera and the wrist camera. The unused external camera ID can be omitted.
+
+## 5. Evaluate Zero-Shot vs Finetuned Policies
+
+Use the fixed-protocol eval client when comparing the public zero-shot `pi0_fast_droid` policy against the pen-in-cup finetuned checkpoint. It defaults to 10 trials with prompt `Pick the pen and put it in the cup`, right external camera `25916956`, wrist camera `18650758`, and `external_camera=right`.
+
+Start the zero-shot server on an ILIAD GPU node:
+
+```bash
+POLICY=zero_shot sbatch examples/droid/serve_pen_in_cup_policy.sbatch
+```
+
+Start the finetuned server on an ILIAD GPU node:
+
+```bash
+POLICY=finetuned sbatch examples/droid/serve_pen_in_cup_policy.sbatch
+```
+
+The finetuned server defaults to:
+
+```bash
+/scr/tiangao/openpi_checkpoints/pi0_fast_droid_pen_in_cup_finetune_validation_10k
+```
+
+On the DROID control laptop, install the lightweight client package from this repo, copy `examples/droid/evaluate_pen_in_cup.py` to `$DROID_ROOT/scripts/evaluate_pen_in_cup.py`, and run the eval client against the server IP:
+
+```bash
+python3 scripts/evaluate_pen_in_cup.py \
+  --remote-host=<server_ip> \
+  --remote-port=8000 \
+  --policy-label=zero_shot
+```
+
+Then run the same physical setup against the finetuned server:
+
+```bash
+python3 scripts/evaluate_pen_in_cup.py \
+  --remote-host=<server_ip> \
+  --remote-port=8000 \
+  --policy-label=finetuned
+```
+
+Checklist before each run:
+
+- Confirm the policy server log prints the expected `POLICY_CONFIG` and `POLICY_DIR`.
+- Confirm the DROID laptop can reach the server: `ping <server_ip>`.
+- Confirm camera IDs with `ZED_Explorer` if images are missing.
+- Confirm the first-frame preview in the result directory shows the pen, cup, and wrist view.
+- Confirm each run writes `trials.csv`, `trials.jsonl`, and rollout videos under `results/pen_in_cup/<policy_label>/<timestamp>/`.

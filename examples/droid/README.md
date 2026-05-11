@@ -5,6 +5,7 @@ We offer instructions for:
 - [Running inference for other pre-trained DROID policies ($\pi_0$, $\pi_0$-FAST, ...)](./README.md#running-roboarena-baseline-policies)
 - [Pre-training *generalist* policies on the *full* DROID dataset](./README_train.md#training-on-droid)
 - [Fine-tuning expert $\pi_{0.5}$ on your custom DROID dataset](./README_train.md#fine-tuning-on-custom-droid-datasets)
+- [Evaluating zero-shot and finetuned pen-in-cup policies](./README_pen_in_cup.md#5-evaluate-zero-shot-vs-finetuned-policies)
 
 ## Running DROID Inference
 
