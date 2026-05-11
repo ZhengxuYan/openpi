@@ -702,6 +702,48 @@ _CONFIGS = [
         ),
     ),
     TrainConfig(
+        name="pi0_fast_droid_pen_in_cup_finetune_validation",
+        model=pi0_fast.Pi0FASTConfig(action_dim=8, action_horizon=10, max_token_len=180),
+        data=LeRobotDROIDDataConfig(
+            repo_id="skybhh19/droid_pen_in_cup_success",
+            base_config=DataConfig(prompt_from_task=True),
+            assets=AssetsConfig(
+                assets_dir="gs://openpi-assets/checkpoints/pi0_fast_droid/assets",
+                asset_id="droid",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi0_fast_droid/params"
+        ),
+        num_train_steps=5_000,
+        batch_size=32,
+        validation_split=0.05,
+        validation_num_batches=10,
+        save_interval=500,
+        keep_period=1_000,
+    ),
+    TrainConfig(
+        name="pi0_fast_droid_pen_in_cup_finetune_validation_10k",
+        model=pi0_fast.Pi0FASTConfig(action_dim=8, action_horizon=10, max_token_len=180),
+        data=LeRobotDROIDDataConfig(
+            repo_id="skybhh19/droid_pen_in_cup_success",
+            base_config=DataConfig(prompt_from_task=True),
+            assets=AssetsConfig(
+                assets_dir="gs://openpi-assets/checkpoints/pi0_fast_droid/assets",
+                asset_id="droid",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi0_fast_droid/params"
+        ),
+        num_train_steps=10_000,
+        batch_size=32,
+        validation_split=0.05,
+        validation_num_batches=10,
+        save_interval=1_000,
+        keep_period=2_000,
+    ),
+    TrainConfig(
         name="pi05_droid",
         model=pi0_config.Pi0Config(action_horizon=15, pi05=True),
         data=SimpleDataConfig(
@@ -879,7 +921,26 @@ _CONFIGS = [
         validation_num_batches=10,
     ),
     TrainConfig(
-        name="pi0_fast_robomimic_square_mh_agentview_low_mem_finetune",
+        name="pi0_fast_robomimic_square_ph_left_close_low_low_mem_finetune_validation",
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ),
+        data=LeRobotRobomimicDataConfig(
+            repo_id="skybhh19/lerobot_robomimic_square_ph_left_close_low",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
+    ),
+    TrainConfig(
+        name="pi0_fast_robomimic_square_mh_agentview_low_mem_finetune_validation",
         # Here is an example of loading a pi0-FAST model for LoRA finetuning.
         # For setting action_dim, action_horizon, and max_token_len, see the comments above.
         model=pi0_fast.Pi0FASTConfig(
@@ -899,6 +960,70 @@ _CONFIGS = [
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
+    ),
+    TrainConfig(
+        name="pi0_fast_robomimic_square_mh_left_close_low_low_mem_finetune_validation",
+        # Here is an example of loading a pi0-FAST model for LoRA finetuning.
+        # For setting action_dim, action_horizon, and max_token_len, see the comments above.
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ),
+        data=LeRobotRobomimicDataConfig(
+            repo_id="skybhh19/lerobot_robomimic_square_mh_left_close_low",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        # Again, make sure to match the model config above when extracting the freeze filter
+        # that specifies which parameters should be frozen during LoRA finetuning.
+        freeze_filter=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
+    ),
+    TrainConfig(
+        name="pi0_fast_robomimic_square_random_post_agentview_low_mem_finetune_validation",
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ),
+        data=LeRobotRobomimicDataConfig(
+            repo_id="skybhh19/lerobot_robomimic_square_random_post_agentview",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
+    ),
+    TrainConfig(
+        name="pi0_fast_robomimic_square_random_post_left_close_low_low_mem_finetune_validation",
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ),
+        data=LeRobotRobomimicDataConfig(
+            repo_id="skybhh19/lerobot_robomimic_square_random_post_left_close_low",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0_fast.Pi0FASTConfig(
+            action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        validation_split=0.05,
+        validation_num_batches=10,
     ),
     TrainConfig(
         name="pi05_libero",
