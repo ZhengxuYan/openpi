@@ -79,10 +79,11 @@ echo "POLICY_DIR=$POLICY_DIR"
 echo "PORT=$PORT"
 
 COMMAND=(
-  uv run scripts/serve_policy.py policy:checkpoint
+  uv run scripts/serve_policy.py
+  "--port=$PORT"
+  policy:checkpoint
   "--policy.config=$POLICY_CONFIG"
   "--policy.dir=$POLICY_DIR"
-  "--port=$PORT"
 )
 
 echo "COMMAND=${COMMAND[*]}"

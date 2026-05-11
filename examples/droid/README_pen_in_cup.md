@@ -88,10 +88,9 @@ checkpoints/pi0_fast_droid_pen_in_cup_finetune_validation_10k/pi0_fast_droid_pen
 Start the policy server on a machine with a GPU. Replace the final path component with the checkpoint step you want:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run scripts/serve_policy.py policy:checkpoint \
+CUDA_VISIBLE_DEVICES=0 uv run scripts/serve_policy.py --port=8000 policy:checkpoint \
   --policy.config=pi0_fast_droid_pen_in_cup_finetune_validation_10k \
-  --policy.dir=checkpoints/pi0_fast_droid_pen_in_cup_finetune_validation_10k/pi0_fast_droid_pen_in_cup_finetune_validation_10k/10000 \
-  --port=8000
+  --policy.dir=checkpoints/pi0_fast_droid_pen_in_cup_finetune_validation_10k/pi0_fast_droid_pen_in_cup_finetune_validation_10k/10000
 ```
 
 On the DROID control laptop, use the DROID client flow from `examples/droid/README.md`: install `openpi-client`, make sure `examples/droid/main.py` is available under the DROID scripts directory, and point it at the policy server.
