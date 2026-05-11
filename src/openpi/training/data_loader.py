@@ -157,6 +157,7 @@ def create_rlds_dataset(
     batch_size: int,
     *,
     shuffle: bool = False,
+    split: str = "train",
 ) -> Dataset:
     # At the moment, we only support DROID for RLDS datasets.
     return DroidRldsDataset(
@@ -166,6 +167,7 @@ def create_rlds_dataset(
         action_chunk_size=action_horizon,
         action_space=data_config.action_space,
         datasets=data_config.datasets,
+        split=split,
     )
 
 
@@ -228,6 +230,7 @@ def create_data_loader(
     num_batches: int | None = None,
     skip_norm_stats: bool = False,
     framework: Literal["jax", "pytorch"] = "jax",
+    data_split: Literal["train", "validation", "all"] = "all",
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create a data loader for training.
 
@@ -238,6 +241,8 @@ def create_data_loader(
         num_batches: Determines the number of batches to return.
         skip_norm_stats: Whether to skip data normalization.
         framework: The framework to use ("jax" or "pytorch").
+        data_split: Which split to use. If validation is disabled this is equivalent
+            to "all".
     """
     data_config = config.data.create(config.assets_dirs, config.model)
     logging.info(f"data_config: {data_config}")
@@ -252,6 +257,8 @@ def create_data_loader(
             num_batches=num_batches,
             skip_norm_stats=skip_norm_stats,
             framework=framework,
+            data_split=data_split,
+            validation_split=config.validation_split,
         )
     return create_torch_data_loader(
         data_config,
@@ -265,6 +272,8 @@ def create_data_loader(
         seed=config.seed,
         skip_norm_stats=skip_norm_stats,
         framework=framework,
+        data_split=data_split,
+        validation_split=config.validation_split,
     )
 
 
@@ -281,6 +290,8 @@ def create_torch_data_loader(
     num_workers: int = 0,
     seed: int = 0,
     framework: str = "jax",
+    data_split: Literal["train", "validation", "all"] = "all",
+    validation_split: float = 0.0,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create a data loader for training.
 
@@ -298,9 +309,13 @@ def create_torch_data_loader(
         num_workers: The number of worker processes to use. If zero, the data loader will
             execute in the main process.
         seed: The seed to use for shuffling the data.
+        data_split: Which split to use. If validation is disabled this is equivalent
+            to "all".
+        validation_split: Fraction of samples to reserve for validation.
     """
     dataset = create_torch_dataset(data_config, action_horizon, model_config)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
+    dataset = _split_torch_dataset(dataset, data_split=data_split, validation_split=validation_split, seed=seed)
 
     # Use TorchDataLoader for both frameworks
     # For PyTorch DDP, create DistributedSampler and divide batch size by world size
@@ -347,6 +362,8 @@ def create_rlds_data_loader(
     shuffle: bool = False,
     num_batches: int | None = None,
     framework: str = "jax",
+    data_split: Literal["train", "validation", "all"] = "all",
+    validation_split: float = 0.0,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create an RLDS data loader for training.
 
@@ -363,10 +380,19 @@ def create_rlds_data_loader(
         num_batches: Determines the number of batches to return. If the number exceeds the
             number of batches in the dataset, the data loader will loop over the dataset.
             If not provided, will iterate over the dataset indefinitely.
+        data_split: Which split to use. If validation is disabled this is equivalent
+            to "all".
+        validation_split: Fraction of the TFDS train split to reserve for validation.
     """
     if framework == "pytorch":
         raise NotImplementedError("PyTorch RLDS data loader is not supported yet")
-    dataset = create_rlds_dataset(data_config, action_horizon, batch_size, shuffle=shuffle)
+    dataset = create_rlds_dataset(
+        data_config,
+        action_horizon,
+        batch_size,
+        shuffle=shuffle,
+        split=_rlds_split_name(data_split=data_split, validation_split=validation_split),
+    )
     dataset = transform_iterable_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, is_batched=True)
 
     data_loader = RLDSDataLoader(
@@ -376,6 +402,58 @@ def create_rlds_data_loader(
     )
 
     return DataLoaderImpl(data_config, data_loader)
+
+
+def _validate_split(validation_split: float) -> None:
+    if not 0.0 <= validation_split < 1.0:
+        raise ValueError(f"validation_split must be in [0, 1), got {validation_split}.")
+
+
+def _split_torch_dataset(
+    dataset: Dataset,
+    *,
+    data_split: Literal["train", "validation", "all"],
+    validation_split: float,
+    seed: int,
+) -> Dataset:
+    _validate_split(validation_split)
+    if data_split == "all" or validation_split == 0.0:
+        return dataset
+
+    dataset_size = len(dataset)
+    if dataset_size < 2:
+        raise ValueError("Cannot create a validation split from a dataset with fewer than 2 samples.")
+
+    validation_size = round(dataset_size * validation_split)
+    validation_size = min(max(validation_size, 1), dataset_size - 1)
+
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    indices = torch.randperm(dataset_size, generator=generator).tolist()
+
+    validation_indices = indices[:validation_size]
+    train_indices = indices[validation_size:]
+    split_indices = validation_indices if data_split == "validation" else train_indices
+    logging.info(
+        "Using %s split with %d/%d samples (validation_split=%.4f)",
+        data_split,
+        len(split_indices),
+        dataset_size,
+        validation_split,
+    )
+    return torch.utils.data.Subset(typing.cast(torch.utils.data.Dataset, dataset), split_indices)
+
+
+def _rlds_split_name(*, data_split: Literal["train", "validation", "all"], validation_split: float) -> str:
+    _validate_split(validation_split)
+    if data_split == "all" or validation_split == 0.0:
+        return "train"
+
+    train_percent = round((1.0 - validation_split) * 100)
+    train_percent = min(max(train_percent, 1), 99)
+    if data_split == "validation":
+        return f"train[{train_percent}%:]"
+    return f"train[:{train_percent}%]"
 
 
 class TorchDataLoader:

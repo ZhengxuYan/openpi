@@ -47,6 +47,28 @@ def test_torch_data_loader_parallel():
         assert all(x.shape[0] == 4 for x in jax.tree.leaves(batch))
 
 
+def test_torch_dataset_validation_split():
+    config = pi0_config.Pi0Config(action_dim=24, action_horizon=50, max_token_len=48)
+    dataset = _data_loader.FakeDataset(config, 16)
+
+    train_dataset = _data_loader._split_torch_dataset(  # noqa: SLF001
+        dataset,
+        data_split="train",
+        validation_split=0.25,
+        seed=0,
+    )
+    validation_dataset = _data_loader._split_torch_dataset(  # noqa: SLF001
+        dataset,
+        data_split="validation",
+        validation_split=0.25,
+        seed=0,
+    )
+
+    assert len(train_dataset) == 12
+    assert len(validation_dataset) == 4
+    assert set(train_dataset.indices).isdisjoint(validation_dataset.indices)
+
+
 def test_with_fake_dataset():
     config = _config.get_config("debug")
 

@@ -26,8 +26,8 @@ DROID_CONTROL_FREQUENCY = 15
 @dataclasses.dataclass
 class Args:
     # Hardware parameters
-    left_camera_id: str = "<your_camera_id>"  # e.g., "24259877"
-    right_camera_id: str = "<your_camera_id>"  # e.g., "24514023"
+    left_camera_id: str | None = None  # e.g., "24259877"; optional if using the right external camera
+    right_camera_id: str | None = None  # e.g., "24514023"; optional if using the left external camera
     wrist_camera_id: str = "<your_camera_id>"  # e.g., "13062452"
 
     # Policy parameters
@@ -201,21 +201,36 @@ def _extract_observation(args: Args, obs_dict, *, save_to_disk=False):
     for key in image_observations:
         # Note the "left" below refers to the left camera in the stereo pair.
         # The model is only trained on left stereo cams, so we only feed those.
-        if args.left_camera_id in key and "left" in key:
+        if args.left_camera_id is not None and args.left_camera_id in key and "left" in key:
             left_image = image_observations[key]
-        elif args.right_camera_id in key and "left" in key:
+        elif args.right_camera_id is not None and args.right_camera_id in key and "left" in key:
             right_image = image_observations[key]
         elif args.wrist_camera_id in key and "left" in key:
             wrist_image = image_observations[key]
 
+    external_image = left_image if args.external_camera == "left" else right_image
+    external_camera_id = args.left_camera_id if args.external_camera == "left" else args.right_camera_id
+    if external_camera_id is None:
+        raise ValueError(f"Must provide {args.external_camera}_camera_id when --external_camera={args.external_camera}")
+    if external_image is None:
+        raise ValueError(f"Could not find selected {args.external_camera} external camera image for ID {external_camera_id}")
+    if wrist_image is None:
+        raise ValueError(f"Could not find wrist camera image for ID {args.wrist_camera_id}")
+
     # Drop the alpha dimension
-    left_image = left_image[..., :3]
-    right_image = right_image[..., :3]
+    if left_image is not None:
+        left_image = left_image[..., :3]
+    if right_image is not None:
+        right_image = right_image[..., :3]
+    external_image = external_image[..., :3]
     wrist_image = wrist_image[..., :3]
 
     # Convert to RGB
-    left_image = left_image[..., ::-1]
-    right_image = right_image[..., ::-1]
+    if left_image is not None:
+        left_image = left_image[..., ::-1]
+    if right_image is not None:
+        right_image = right_image[..., ::-1]
+    external_image = external_image[..., ::-1]
     wrist_image = wrist_image[..., ::-1]
 
     # In addition to image observations, also capture the proprioceptive state
@@ -227,11 +242,12 @@ def _extract_observation(args: Args, obs_dict, *, save_to_disk=False):
     # Save the images to disk so that they can be viewed live while the robot is running
     # Create one combined image to make live viewing easy
     if save_to_disk:
-        combined_image = np.concatenate([left_image, wrist_image, right_image], axis=1)
+        preview_images = [img for img in (left_image, wrist_image, right_image) if img is not None]
+        combined_image = np.concatenate(preview_images, axis=1)
         combined_image = Image.fromarray(combined_image)
         combined_image.save("robot_camera_views.png")
 
-    return {
+    obs = {
         "left_image": left_image,
         "right_image": right_image,
         "wrist_image": wrist_image,
@@ -239,6 +255,8 @@ def _extract_observation(args: Args, obs_dict, *, save_to_disk=False):
         "joint_position": joint_position,
         "gripper_position": gripper_position,
     }
+    obs[f"{args.external_camera}_image"] = external_image
+    return obs
 
 
 if __name__ == "__main__":
