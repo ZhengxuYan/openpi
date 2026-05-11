@@ -144,6 +144,8 @@ Start the finetuned server on an ILIAD GPU node:
 POLICY=finetuned sbatch examples/droid/serve_pen_in_cup_policy.sbatch
 ```
 
+The sbatch script avoids `iliad1` and `iliad4` by default so the policy server lands on `iliad5+` GPU hardware.
+
 The finetuned server defaults to:
 
 ```bash
