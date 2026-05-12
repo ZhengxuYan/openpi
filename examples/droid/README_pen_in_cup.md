@@ -145,6 +145,7 @@ POLICY=finetuned sbatch examples/droid/serve_pen_in_cup_policy.sbatch
 ```
 
 The sbatch script avoids `iliad1` and `iliad4` by default so the policy server lands on `iliad5+` GPU hardware.
+It also disables the Hugging Face TensorFlow backend (`USE_TF=0`, `TRANSFORMERS_NO_TF=1`) to keep DROID policy serving on the JAX/PyTorch path.
 
 The finetuned server defaults to:
 
