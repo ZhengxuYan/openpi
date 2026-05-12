@@ -177,4 +177,4 @@ Checklist before each run:
 - Confirm the DROID laptop can reach the server: `ping <server_ip>`.
 - Confirm camera IDs with `ZED_Explorer` if images are missing.
 - Confirm the first-frame preview in the result directory shows the pen, cup, and wrist view.
-- Confirm each run writes `trials.csv`, `trials.jsonl`, and rollout videos under `results/pen_in_cup/<policy_label>/<timestamp>/`.
+- Confirm each run writes `trials.csv`, `trials.jsonl`, and per-trial `_external.mp4` and `_wrist.mp4` rollout videos under `results/pen_in_cup/<policy_label>/<timestamp>/`.

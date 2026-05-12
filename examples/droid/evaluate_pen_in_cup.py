@@ -29,7 +29,8 @@ RESULT_FIELDS = [
     "prompt",
     "success",
     "duration_steps",
-    "video_path",
+    "external_video_path",
+    "wrist_video_path",
     "preview_path",
     "timestamp",
     "remote_host",
@@ -175,12 +176,14 @@ def main(args: Args) -> None:
 
 def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) -> dict:
     trial_timestamp = _datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    video_path = run_dir / f"trial_{trial_index:03d}_{trial_timestamp}.mp4"
+    external_video_path = run_dir / f"trial_{trial_index:03d}_{trial_timestamp}_external.mp4"
+    wrist_video_path = run_dir / f"trial_{trial_index:03d}_{trial_timestamp}_wrist.mp4"
     preview_path = run_dir / f"trial_{trial_index:03d}_{trial_timestamp}_preview.jpg"
 
     actions_from_chunk_completed = 0
     pred_action_chunk = None
-    video_frames = []
+    external_video_frames = []
+    wrist_video_frames = []
     duration_steps = 0
 
     bar = tqdm.tqdm(range(args.max_timesteps), desc=f"trial {trial_index + 1}")
@@ -193,7 +196,8 @@ def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) 
                 env.get_observation(),
                 preview_path=preview_path if t_step == 0 else None,
             )
-            video_frames.append(curr_obs[f"{args.external_camera}_image"])
+            external_video_frames.append(curr_obs[f"{args.external_camera}_image"])
+            wrist_video_frames.append(curr_obs["wrist_image"])
 
             if actions_from_chunk_completed == 0 or actions_from_chunk_completed >= args.open_loop_horizon:
                 actions_from_chunk_completed = 0
@@ -228,7 +232,8 @@ def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) 
             duration_steps = t_step + 1
             break
 
-    _write_video(video_frames, video_path)
+    _write_video(external_video_frames, external_video_path)
+    _write_video(wrist_video_frames, wrist_video_path)
     success = _prompt_success()
     notes = input("Optional notes for this trial: ")
 
@@ -238,7 +243,8 @@ def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) 
         "prompt": args.prompt,
         "success": success,
         "duration_steps": duration_steps,
-        "video_path": str(video_path),
+        "external_video_path": str(external_video_path),
+        "wrist_video_path": str(wrist_video_path),
         "preview_path": str(preview_path),
         "timestamp": trial_timestamp,
         "remote_host": args.remote_host,
