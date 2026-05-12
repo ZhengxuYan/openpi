@@ -52,7 +52,7 @@ class Args:
     # Evaluation labels and output.
     policy_label: str = "finetuned"
     output_dir: Path = Path("results/pen_in_cup")
-    num_trials: int = 10
+    num_trials: int = 20
     prompt: str = DEFAULT_PROMPT
 
     # Hardware parameters for the pen-in-cup collection setup.

@@ -130,7 +130,7 @@ Note: `examples/droid/main.py` only requires the selected external camera and th
 
 ## 5. Evaluate Zero-Shot vs Finetuned Policies
 
-Use the fixed-protocol eval client when comparing the public zero-shot `pi0_fast_droid` policy against the pen-in-cup finetuned checkpoint. It defaults to 10 trials with prompt `Pick the pen and put it in the cup`, right external camera `25916956`, wrist camera `18650758`, and `external_camera=right`.
+Use the fixed-protocol eval client when comparing the public zero-shot `pi0_fast_droid` policy against the pen-in-cup finetuned checkpoint. It defaults to 20 trials with prompt `Pick the pen and put it in the cup`, right external camera `25916956`, wrist camera `18650758`, and `external_camera=right`.
 
 Start the zero-shot server on an ILIAD GPU node:
 
