@@ -199,7 +199,9 @@ def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) 
             external_video_frames.append(curr_obs[f"{args.external_camera}_image"])
             wrist_video_frames.append(curr_obs["wrist_image"])
 
-            if actions_from_chunk_completed == 0 or actions_from_chunk_completed >= args.open_loop_horizon:
+            if pred_action_chunk is None or actions_from_chunk_completed >= min(
+                args.open_loop_horizon, pred_action_chunk.shape[0]
+            ):
                 actions_from_chunk_completed = 0
                 request_data = {
                     "observation/exterior_image_1_left": image_tools.resize_with_pad(
@@ -213,8 +215,8 @@ def _run_trial(args: Args, env, policy_client, run_dir: Path, trial_index: int) 
 
                 with prevent_keyboard_interrupt():
                     pred_action_chunk = policy_client.infer(request_data)["actions"]
-                if pred_action_chunk.shape != (10, 8):
-                    raise ValueError(f"Expected action chunk shape (10, 8), got {pred_action_chunk.shape}")
+                if pred_action_chunk.ndim != 2 or pred_action_chunk.shape[-1] != 8:
+                    raise ValueError(f"Expected action chunk shape [horizon, 8], got {pred_action_chunk.shape}")
 
             action = pred_action_chunk[actions_from_chunk_completed]
             actions_from_chunk_completed += 1
